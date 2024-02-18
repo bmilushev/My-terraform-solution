@@ -1,27 +1,43 @@
-# Create a launch config for the ASG
-resource "aws_launch_configuration" "web_conf" {
-  name_prefix     = var.asg_launch_config_name
-  image_id        = var.instance_ami
-  instance_type   = var.instance_type
-  key_name        = var.key_name
-  user_data       = file("ec2-user-data.sh")
-  security_groups = [aws_security_group.web-sg.id]
-  iam_instance_profile = "my-ec2-web-profile"
-
-  lifecycle {
-    create_before_destroy = true
-  }
-}
-
 # Create an ASG
 resource "aws_autoscaling_group" "my_web_asg" {
-  name                 = var.asg_name
-  max_size             = 3
-  min_size             = 1
-  desired_capacity     = 1
-  launch_configuration = aws_launch_configuration.web_conf.id
-  vpc_zone_identifier  = [aws_subnet.subnet_az1_private_1.id, aws_subnet.subnet_az2_private_1.id]
-  target_group_arns    = [aws_lb_target_group.my_target_group.id]
+  name             = var.asg_name
+  max_size         = 3
+  min_size         = 1
+  desired_capacity = 1
+  launch_template {
+    id      = aws_launch_template.my_launch_template.id
+    version = "$Latest"
+  }
+  vpc_zone_identifier = [aws_subnet.subnet_az1_private_1.id, aws_subnet.subnet_az2_private_1.id]
+  target_group_arns   = [aws_lb_target_group.my_target_group.id]
+}
+
+# Create launch template for the ASG
+resource "aws_launch_template" "my_launch_template" {
+  name                   = "my-launch-template"
+  image_id               = var.instance_ami
+  instance_type          = var.instance_type
+  key_name               = var.key_name
+  vpc_security_group_ids = [aws_security_group.web-sg.id]
+  user_data              = filebase64("ec2-user-data.sh")
+
+  iam_instance_profile {
+    name = "my-ec2-web-profile"
+  }
+
+  ebs_optimized = false
+
+  monitoring {
+    enabled = true
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = {
+      Name = "Bozho-web-test"
+    }
+  }
 }
 
 # Create a "scale in" policy for the ASG
